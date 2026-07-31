@@ -1,4 +1,5 @@
 import { hasBuiltInTranslationSupport } from "@/scripts/builtInTranslate.ts";
+import { CANARY_API_URL } from "@/scripts/languages.ts";
 import { createDownloadsController } from "@/scripts/downloads.ts";
 import { createEditorHistory } from "@/scripts/editorHistory.ts";
 import { createEditorSegmentsController } from "@/scripts/editorSegments.ts";
@@ -329,6 +330,7 @@ const configStageController = createConfigStageController({
   resetHistory,
   updateCaption,
   setStage,
+  canaryApiUrl: CANARY_API_URL,
 });
 
 translationService = createTranslationService({

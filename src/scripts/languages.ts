@@ -1,6 +1,22 @@
 export const ASR_MODEL = "Xenova/whisper-base"
 export const TRANSLATION_MODEL = "Xenova/nllb-200-distilled-600M"
 
+// Canary API configuration
+// Set PUBLIC_CANARY_API_URL env var (e.g. http://localhost:8000) to use
+// NVIDIA Canary-180m-flash backend instead of browser Whisper.
+// In Astro/Vite, public env vars must be prefixed with PUBLIC_.
+export const CANARY_API_URL =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.PUBLIC_CANARY_API_URL) ||
+  ""
+
+// Canary-180m-flash supported languages (en, es, de, fr)
+export const CANARY_LANGS: Record<string, { label: string }> = {
+  en: { label: "English" },
+  es: { label: "Spanish" },
+  de: { label: "German" },
+  fr: { label: "French" },
+}
+
 export const MARIAN_TRANSLATION_MODELS: Record<string, string> = {
   "en:es": "Xenova/opus-mt-en-es",
   "es:en": "Xenova/opus-mt-es-en",

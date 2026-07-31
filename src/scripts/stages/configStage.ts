@@ -1,5 +1,5 @@
 import { prettifyBytes } from "@/scripts/file.ts"
-import { ASR_MODEL, LANGS } from "@/scripts/languages.ts"
+import { ASR_MODEL, CANARY_API_URL, CANARY_LANGS, LANGS } from "@/scripts/languages.ts"
 import { createAudioService } from "@/scripts/media/audio.ts"
 import type { Stage } from "@/scripts/stageManager.ts"
 import {
@@ -82,6 +82,7 @@ type ConfigStageOptions = {
   resetHistory: () => void
   updateCaption: () => void
   setStage: (stage: Stage) => void
+  canaryApiUrl: string
 }
 
 const hasWebGPU = typeof navigator !== "undefined" && "gpu" in navigator
@@ -103,6 +104,7 @@ export function createConfigStageController({
   resetHistory,
   updateCaption,
   setStage,
+  canaryApiUrl,
 }: ConfigStageOptions) {
   let asrReady = false
   let asrReadyPromise: Promise<void> | null = null
@@ -242,7 +244,8 @@ export function createConfigStageController({
   function outputTarget(sourceLang: string) {
     const value = ui.outputLang.value
     if (!value || value === "same") return sourceLang
-    return value in LANGS ? value : sourceLang
+    const available = useCanaryApi ? CANARY_LANGS : LANGS
+    return value in available ? value : sourceLang
   }
 
   function canEnableDualTrackOption() {
@@ -251,13 +254,16 @@ export function createConfigStageController({
   }
 
   function syncDualTrackOption() {
-    const available = canEnableDualTrackOption()
+    const available = canEnableDualTrackOption() && !useCanaryApi
     ui.dualTrackField.hidden = !available
     ui.dualTrack.disabled = !available
     if (!available) ui.dualTrack.checked = false
   }
 
+  const useCanaryApi = !!canaryApiUrl
+
   async function ensureRecognizer() {
+    if (useCanaryApi) return
     if (asrReady) return
     if (!asrReadyPromise) {
       asrReadyPromise = (async () => {
@@ -276,16 +282,21 @@ export function createConfigStageController({
   }
 
   async function preloadAssetsInBackground() {
-    await Promise.allSettled([
+    const tasks: Promise<any>[] = [
       ensureFfmpeg().catch((error) => {
         console.error(error)
         updateDownloadStatus("ffmpeg", "error")
       }),
-      ensureRecognizer().catch((error) => {
-        console.error(error)
-        updateDownloadStatus("asr", "error")
-      }),
-    ])
+    ]
+    if (!useCanaryApi) {
+      tasks.push(
+        ensureRecognizer().catch((error) => {
+          console.error(error)
+          updateDownloadStatus("asr", "error")
+        }),
+      )
+    }
+    await Promise.allSettled(tasks)
   }
 
   function requestFromCurrentOptions(file: File): TranscriptionRequest {
@@ -463,8 +474,9 @@ export function createConfigStageController({
       settled: false,
     } as TranscriptionJob
 
+    const runner = useCanaryApi ? runCanaryTranscriptionJob : runTranscriptionJob
     job.promise = transcriptionQueue
-      .then(() => runTranscriptionJob(job))
+      .then(() => runner(job))
       .then(
         (result) => {
           job.result = result
@@ -482,6 +494,207 @@ export function createConfigStageController({
     transcriptionQueue = job.promise.catch(() => {})
     transcriptionJobs.set(key, job)
     return job
+  }
+
+  async function runCanaryTranscriptionJob(
+    job: TranscriptionJob,
+  ): Promise<TranscriptionJobResult> {
+    const { file, language, wordTimestamps } = job.request
+
+    const sourceLang = language || "en"
+    const target = outputTarget(sourceLang)
+
+    if (canUpdateJobProgress(job.key)) {
+      setStatus("Uploading audio to Canary server…", "busy")
+      setProgress(2)
+      setIndeterminate(true)
+    }
+
+    logGeneration("canary:start", {
+      fileName: file.name,
+      fileSize: file.size,
+      sourceLang,
+      targetLang: target,
+      wordTimestamps,
+    })
+
+    // Kick off audio extraction in parallel with the upload/SSE so we can
+    // refine Canary's word-level timestamps (proportionally distributed by
+    // the backend) against actual speech edges via the frontend's VAD.
+    // Failure is non-fatal — an empty buffer falls back to the old behavior
+    // (no refinement, but the word-split backend pipeline still kicks in).
+    const audioRefinementPromise = extractAudioBuffer(file).catch((error) => {
+      console.warn(
+        "[generate] audio extraction for subtitle refinement failed",
+        error,
+      )
+      return new Float32Array(0)
+    })
+
+    // Build FormData
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("source_lang", sourceLang)
+    formData.append("target_lang", target)
+    formData.append("word_timestamps", wordTimestamps ? "true" : "false")
+    formData.append("pnc", "true")
+
+    const uploadStart = performance.now()
+
+    try {
+      // Step 1: POST the file, get job_id + stream_url
+      const startResponse = await fetch(`${canaryApiUrl}/api/transcribe/stream`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!startResponse.ok) {
+        const errorText = await startResponse.text().catch(() => "Unknown error")
+        throw new Error(`Canary API error (${startResponse.status}): ${errorText}`)
+      }
+
+      const { job_id, stream_url } = await startResponse.json()
+      logGeneration("canary:uploaded", {
+        jobId: job_id,
+        elapsedMs: Math.round(performance.now() - uploadStart),
+      })
+
+      if (canUpdateJobProgress(job.key)) {
+        setIndeterminate(false)
+        setProgress(8)
+        setStatus("Waiting for Canary server…", "busy")
+      }
+
+      // Step 2: Open SSE stream for progress events
+      const result = await new Promise<any>((resolve, reject) => {
+        // Resolve stream_url relative to canaryApiUrl (handles trailing slashes)
+        const streamFullUrl = new URL(stream_url, canaryApiUrl).href
+
+        const eventSource = new EventSource(streamFullUrl)
+        let chunksDone = 0
+        let totalChunks = 0
+        let audioSeconds = 60
+        let lastProgress = 10
+        let settled = false
+        const transcribeStart = performance.now()
+
+        // Timeout after 15 minutes
+        const timeoutId = setTimeout(() => {
+          fail(new Error("Transcription timed out after 15 minutes. Try a shorter file."))
+        }, 900_000)
+
+        const finish = (result: any) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeoutId)
+          eventSource.close()
+          resolve(result)
+        }
+
+        const fail = (error: Error) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeoutId)
+          eventSource.close()
+          reject(error)
+        }
+
+        eventSource.addEventListener("progress", (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data)
+            chunksDone = data.chunks_done || 0
+            totalChunks = data.total_chunks || 0
+            const pct = data.progress || 0
+
+            if (canUpdateJobProgress(job.key)) {
+              setIndeterminate(false)
+              setProgress(pct)
+              setStatus(data.message || tt("steps.transcribing"), "busy")
+
+              // Smooth animation between SSE events
+              const nextPct = totalChunks > 0
+                ? 20 + Math.floor(70 * (chunksDone + 1) / totalChunks)
+                : Math.min(pct + 5, 90)
+              if (pct < 90 && pct > lastProgress) {
+                startProgressCreep(pct, nextPct,
+                  totalChunks > 0 ? 5000 : 10000)
+              }
+              lastProgress = pct
+
+              if (totalChunks > 0 && chunksDone > 0 && chunksDone < totalChunks) {
+                logGeneration("canary:chunk", {
+                  chunk: chunksDone,
+                  totalChunks,
+                  elapsedMs: Math.round(performance.now() - transcribeStart),
+                })
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        })
+
+        eventSource.addEventListener("result", (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data)
+            const output = data.result
+            if (!output) {
+              fail(new Error("No result in SSE event"))
+              return
+            }
+
+            const lastChunk = output.chunks?.[output.chunks.length - 1]
+            audioSeconds = lastChunk?.timestamp?.[1] || 60
+
+            logGeneration("canary:done", {
+              chunks: chunksDone,
+              totalChunks,
+              segments: output.chunks?.length || 0,
+              elapsedMs: Math.round(performance.now() - transcribeStart),
+              totalElapsedMs: Math.round(performance.now() - uploadStart),
+            })
+
+            if (canUpdateJobProgress(job.key)) {
+              stopProgressCreep()
+              setProgress(90)
+            }
+
+            // Resolve with a Promise so the outer await unwraps both the SSE
+            // result AND the parallel audio extraction. Use the actual audio
+            // buffer length for `audioSeconds` (the last-chunk-end heuristic
+            // underestimates because Canary returns word-level chunks now).
+            resolve(
+              audioRefinementPromise.then((audioBuffer) => ({
+                output,
+                audio: audioBuffer,
+                audioSeconds: audioBuffer.length
+                  ? audioBuffer.length / 16000
+                  : audioSeconds,
+                chunksDone,
+              })),
+            )
+          } catch (e) {
+            fail(e instanceof Error ? e : new Error(String(e)))
+          }
+        })
+
+        // Named "failure" event from backend (avoids EventSource.onerror conflict)
+        eventSource.addEventListener("failure", (event: MessageEvent) => {
+          let errorMsg = "Transcription failed on server"
+          try {
+            const data = JSON.parse(event.data)
+            errorMsg = data.error || data.message || errorMsg
+          } catch { /* use default */ }
+          fail(new Error(errorMsg))
+        })
+
+      })
+
+      return result
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        throw new Error("Transcription timed out. Try a shorter file.")
+      }
+      throw error
+    }
   }
 
   function resetTranscriptionCache() {
@@ -551,6 +764,7 @@ export function createConfigStageController({
       outputLang: ui.outputLang.value || "same",
       wordAnimation: ui.wordAnimation.checked,
       webgpu: hasWebGPU,
+      canaryApi: useCanaryApi,
     })
 
     try {
@@ -578,17 +792,43 @@ export function createConfigStageController({
         normalizeLanguageCode(output?.language) ||
         normalizeLanguageCode(ui.inputLang.value) ||
         "en"
+
+      // Both the Canary API path and the local Whisper path use normalizeSegments
+      // for display-quality processing:
+      //   • aspect-ratio-aware line limits (max chars/words per subtitle,
+      //     shorter lines on portrait videos so text doesn't overflow)
+      //   • minimum 0.35s duration per segment (avoids flash-disappearing
+      //     subtitles for very short chunks)
+      //   • overlap resolution between consecutive segments
+      //   • merges gaps < 0.06s between speech runs
+      //   • refines start/end against actual speech edges when `audio` is
+      //     non-empty (energy-based VAD from the WAV buffer)
+      // Whisper's local path feeds the extracted Float32Array → full refinement.
+      // Canary currently sends an empty audio buffer → speech-run refinement is
+      // a no-op there, but the duration/overlap/line-limit fixes still apply.
       const vw = ui.configVideo?.videoWidth || ui.video?.videoWidth || 0
       const vh = ui.configVideo?.videoHeight || ui.video?.videoHeight || 0
       const aspectRatio = vw && vh ? vw / vh : 16 / 9
-      const baseSegments = normalizeSegments(output, {
+      let baseSegments: Segment[] = normalizeSegments(output, {
         audio,
         sampleRate: 16_000,
         aspectRatio,
       })
+
+      // Fallback: if the model returned text but no usable chunks (very rare),
+      // build a single segment so the user still sees something in the editor.
+      if (!baseSegments.length && output.text?.trim()) {
+        baseSegments = [{ start: 0, end: 6, text: output.text.trim() }]
+      }
+
+      // Note: when using Canary API, the output already contains the target
+      // language transcription. Canary handles translation natively
+      // (source_lang → target_lang), so we don't need client-side NLLB/MarianMT.
+
       logGeneration("segments:ready", {
         detectedLang,
         segments: baseSegments.length,
+        canaryTranslation: useCanaryApi,
         elapsedMs: Math.round(performance.now() - normalizeStartedAt),
         totalElapsedMs: Math.round(performance.now() - generationStartedAt),
       })
@@ -597,56 +837,79 @@ export function createConfigStageController({
 
       const target = outputTarget(detectedLang)
       const targets = [detectedLang]
-      if (target !== detectedLang && !targets.includes(target))
-        targets.push(target)
+
+      // When using Canary API with self-translation, the output is already in target language.
+      // We only need to set up the single target language track.
+      if (useCanaryApi && target !== detectedLang) {
+        // Canary already translated from detectedLang → target.
+        // Set target as the primary output, keeping detectedLang as the source.
+        // For dual-track, Canary would need a second API call (not implemented yet).
+        setProgress(94)
+      } else if (!useCanaryApi) {
+        if (target !== detectedLang && !targets.includes(target))
+          targets.push(target)
+      }
+
       const dualTrackMode =
-        ui.dualTrack.checked &&
-        !ui.inputLang.value &&
-        target !== detectedLang &&
-        targets.includes(target)
+        useCanaryApi
+          ? false // Canary single-call mode doesn't support dual track
+          : ui.dualTrack.checked &&
+            !ui.inputLang.value &&
+            target !== detectedLang &&
+            targets.includes(target)
 
       const TX_START = 92
       const TX_SPAN = 100 - TX_START
       const segmentsByLang: SegmentsByLang = {}
       let done = 0
 
-      for (const lang of targets) {
-        if (lang === detectedLang) {
-          segmentsByLang[lang] = baseSegments.map((segment) => ({ ...segment }))
-        } else {
-          const translationStartedAt = performance.now()
-          logGeneration("translation:start", {
-            sourceLang: detectedLang,
-            targetLang: lang,
-            segments: baseSegments.length,
-          })
-          startProgressCreep(
-            TX_START + (done / targets.length) * TX_SPAN,
-            Math.min(99, TX_START + ((done + 1) / targets.length) * TX_SPAN),
-            6000,
-          )
-          segmentsByLang[lang] = await translateSegments(
-            baseSegments,
-            detectedLang,
-            lang,
-          )
-          stopProgressCreep()
-          logGeneration("translation:done", {
-            sourceLang: detectedLang,
-            targetLang: lang,
-            elapsedMs: Math.round(performance.now() - translationStartedAt),
-            totalElapsedMs: Math.round(performance.now() - generationStartedAt),
-          })
+      if (useCanaryApi) {
+        // Canary already produced the target language output.
+        // The output language from the API is the target_lang we requested.
+        // Note: dual-track mode is not supported in single-call Canary mode.
+        const outputLang = target
+        segmentsByLang[outputLang] = baseSegments.map((s) => ({ ...s }))
+        done = 1
+        setProgress(TX_START + TX_SPAN)
+      } else {
+        for (const lang of targets) {
+          if (lang === detectedLang) {
+            segmentsByLang[lang] = baseSegments.map((segment) => ({ ...segment }))
+          } else {
+            const translationStartedAt = performance.now()
+            logGeneration("translation:start", {
+              sourceLang: detectedLang,
+              targetLang: lang,
+              segments: baseSegments.length,
+            })
+            startProgressCreep(
+              TX_START + (done / targets.length) * TX_SPAN,
+              Math.min(99, TX_START + ((done + 1) / targets.length) * TX_SPAN),
+              6000,
+            )
+            segmentsByLang[lang] = await translateSegments(
+              baseSegments,
+              detectedLang,
+              lang,
+            )
+            stopProgressCreep()
+            logGeneration("translation:done", {
+              sourceLang: detectedLang,
+              targetLang: lang,
+              elapsedMs: Math.round(performance.now() - translationStartedAt),
+              totalElapsedMs: Math.round(performance.now() - generationStartedAt),
+            })
+          }
+          done += 1
+          setProgress(TX_START + (done / targets.length) * TX_SPAN)
         }
-        done += 1
-        setProgress(TX_START + (done / targets.length) * TX_SPAN)
       }
 
       setGeneratedState({
         detectedLang,
         baseSegments,
         segmentsByLang,
-        orderedLangs: targets,
+        orderedLangs: useCanaryApi ? [target] : targets,
         activeLang: target,
         dualTrackMode,
         dualTrackLangs: dualTrackMode ? [detectedLang, target] : [],
@@ -672,7 +935,7 @@ export function createConfigStageController({
       logGeneration("done", {
         totalElapsedMs,
         segments: baseSegments.length,
-        tracks: targets.length,
+        tracks: useCanaryApi ? 1 : targets.length,
       })
     } catch (error: any) {
       console.error(error)

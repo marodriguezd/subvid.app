@@ -1,0 +1,24 @@
+# NeMo Canary Backend Dependencies
+# Requires: ffmpeg, libsndfile (system packages)
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.12
+
+# NeMo ASR with Canary model
+nemo_toolkit[asr]>=2.0.0
+
+# PyTorch (CUDA 12.x recommended for GPU inference)
+torch>=2.4.0
+torchaudio>=2.4.0
+
+# Audio utilities
+numpy>=1.26.0
+soundfile>=0.12.0
+
+# CORS support
+# (handled by FastAPI middleware)
+
+# Optional: for better performance
+# onnxruntime-gpu  (if exporting Canary to ONNX)

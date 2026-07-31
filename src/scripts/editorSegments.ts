@@ -1,5 +1,5 @@
 import { $ } from "@/scripts/dom.ts"
-import { LANGS } from "@/scripts/languages.ts"
+import { CANARY_API_URL, CANARY_LANGS, LANGS } from "@/scripts/languages.ts"
 import { formatClock, parseClock } from "@/scripts/subtitles.ts"
 
 type EditorState = {
@@ -98,9 +98,12 @@ export function createEditorSegmentsController(options: EditorSegmentsOptions) {
   }
 
   function buildLangSelects() {
+    const useCanary = !!CANARY_API_URL
+    const availableLangs = useCanary ? CANARY_LANGS : LANGS
+
     ui.inputLang.innerHTML = `<option value="">${tt("detectAuto")}</option>`
     ui.outputLang.innerHTML = `<option value="same">${tt("sameAsAudio")}</option>`
-    Object.keys(LANGS).forEach((code) => {
+    Object.keys(availableLangs).forEach((code) => {
       const inOpt = document.createElement("option")
       inOpt.value = code
       inOpt.textContent = langName(code)
@@ -137,6 +140,9 @@ export function createEditorSegmentsController(options: EditorSegmentsOptions) {
   function populateAddLang() {
     if (!ui.langAddSelect) return
     const { orderedLangs } = getState()
+    // Note: even when Canary limits input/output to 4 languages,
+    // the "Add Language" feature uses NLLB/MarianMT for translation
+    // which supports all languages in LANGS.
     const remaining = Object.entries(LANGS).filter(
       ([code]) => !orderedLangs.includes(code),
     )
