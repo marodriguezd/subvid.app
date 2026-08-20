@@ -60,7 +60,7 @@ jobs:
         run: |
           pnpm run electron:dist:linux
           mkdir -p release-assets
-          find dist-electron/ -maxdepth 1 -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.tar.gz" \) -exec cp -fv {} release-assets/ \;
+          find dist-electron/ -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.tar.gz" \) -exec cp -fv {} release-assets/ \;
           ls -lah release-assets/
 
       - name: 🪟 Package Electron for Windows
