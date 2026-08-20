@@ -76,7 +76,7 @@ jobs:
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools'
+          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -133,10 +133,8 @@ jobs:
           chmod +x gradlew
           echo "==> Building Debug APK..."
           ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log || {
-            echo "### ❌ Debug Build Failure" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 60 ../debug_build.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "::error::assembleDebug failed"
+            tail -n 100 ../debug_build.log
             exit 1
           }
           
@@ -165,3 +163,12 @@ jobs:
           path: build-outputs
           if-no-files-found: warn
           retention-days: 30
+
+      - name: 📤 Upload Build Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: "*.log"
+          if-no-files-found: ignore
+          retention-days: 7
