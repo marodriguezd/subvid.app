@@ -16,6 +16,9 @@ public class MainActivity extends BridgeActivity {
         // Ensure status bar / cutout insets are respected and not overlapped
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         
+        // Enable Chrome DevTools & ADB remote debugging
+        android.webkit.WebView.setWebContentsDebuggingEnabled(true);
+        
         View contentView = findViewById(android.R.id.content);
         if (contentView != null) {
             ViewCompat.setOnApplyWindowInsetsListener(contentView, (v, windowInsets) -> {

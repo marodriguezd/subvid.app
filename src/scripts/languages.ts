@@ -1,4 +1,4 @@
-export const ASR_MODEL = "Xenova/whisper-base"
+export const ASR_MODEL = "onnx-community/whisper-tiny"
 export const TRANSLATION_MODEL = "Xenova/nllb-200-distilled-600M"
 
 export const MARIAN_TRANSLATION_MODELS: Record<string, string> = {

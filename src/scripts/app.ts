@@ -415,3 +415,42 @@ ui.downloadsToggle.addEventListener("click", () => {
   if (opening) refreshClearModelsUI();
 });
 ui.clearModelsBtn?.addEventListener("click", clearLocalModels);
+
+// ── Test helper for ADB & automated testing ──
+(window as any).__subvid_test = {
+  loadMediaFile: (file: File) => {
+    uploadStageController.handleSelectedFile(file);
+    return true;
+  },
+  loadMediaFromBlob: (blob: Blob, name = "sample_test.webm") => {
+    const file = new File([blob], name, { type: blob.type || "video/webm" });
+    uploadStageController.handleSelectedFile(file);
+    return true;
+  },
+  generate: () => {
+    ui.transcribeBtn.click();
+    return true;
+  },
+  switchTab: (tab: string) => {
+    if (ui.stageEditor) {
+      ui.stageEditor.dataset.mobileTab = tab;
+      ui.mobileEditorTabs
+        ?.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn")
+        .forEach((b) => b.classList.toggle("is-active", b.dataset.tab === tab));
+    }
+    return true;
+  },
+  getState: () => ({
+    stage: !ui.stageEditor.hidden
+      ? "editor"
+      : !ui.stageConfig.hidden
+        ? "config"
+        : "upload",
+    meta: ui.meta.textContent,
+    segCount: ui.segCount?.textContent,
+    activeTab: ui.stageEditor?.dataset.mobileTab || "subtitles",
+    isPlaying: !ui.video.paused,
+    duration: ui.video.duration || 0,
+    currentTime: ui.video.currentTime || 0,
+  }),
+};
