@@ -1,27 +1,18 @@
-name: Android Release Publisher
+name: Android Release - Build & Publish APK/AAB
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Release Tag (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
-      release_title:
-        description: 'Release Title'
-        required: false
-        default: 'Subvid Android App Release'
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build-and-publish-release:
-    name: 🚀 Build & Publish Android Release
+  build-and-release:
+    name: 🚀 Build & Release Android App
     runs-on: ubuntu-latest
 
     steps:
@@ -30,16 +21,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: ☕ Setup Java 17 (Temurin)
+      - name: ☕ Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -76,7 +65,7 @@ jobs:
             echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
             echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
           else
-            echo "Generating self-signed release keystore..."
+            echo "Generating self-signed release keystore for release..."
             keytool -genkey -v -keystore $HOME/keystore/release.jks \
               -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass subvid123 -keypass subvid123 \
@@ -91,7 +80,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug assembleRelease bundleRelease --stacktrace
+          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
 
       - name: 📂 Prepare Release Artifacts
         run: |
@@ -105,6 +94,8 @@ jobs:
           # Release APK
           if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
             cp android/app/build/outputs/apk/release/app-release.apk release-assets/subvid-release.apk
+          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/subvid-release-unsigned.apk
           fi
           
           # Android App Bundle (AAB)
@@ -114,31 +105,13 @@ jobs:
 
           ls -lah release-assets/
 
-      - name: 🚀 Create GitHub Release & Upload Assets
+      - name: 🚀 Create GitHub Release & Upload Artifacts
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          name: ${{ github.event.inputs.release_title || github.ref_name }}
-          body: |
-            ## 📱 Subvid Android App
-            
-            Subvid mobile release for Android! Generate, edit, translate, and export subtitles on Android devices.
-            
-            ### 📥 Downloads
-            - **`subvid-release.apk`**: Production Signed APK for direct installation on Android devices.
-            - **`subvid-debug.apk`**: Debug APK for testing.
-            - **`subvid-release.aab`**: Android App Bundle ready for Google Play Store upload.
-            
-            ### 🚀 Features in Android App
-            - 100% Client-side AI Whisper transcription & NLLB translation.
-            - Local video/audio subtitle burning and .srt export with native Android Share/Save.
-            - Offline model caching via IndexedDB.
-            - Hardware acceleration and high-performance WebAssembly.
-          files: |
-            release-assets/subvid-release.apk
-            release-assets/subvid-debug.apk
-            release-assets/subvid-release.aab
+          name: "Subvid Android App ${{ github.ref_name }}"
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true
+          files: |
+            release-assets/*

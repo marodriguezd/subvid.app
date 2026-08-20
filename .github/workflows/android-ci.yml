@@ -130,14 +130,14 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: 🔨 Build Release APK & Bundle (AAB)
         if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace
+          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
 
       - name: 📂 Prepare Release Artifacts
         run: |
