@@ -67,16 +67,14 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 17 (Temurin)
+      - name: ☕ Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -132,14 +130,14 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
       - name: 🔨 Build Release APK & Bundle (AAB)
         if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace
+          ./gradlew assembleRelease bundleRelease --stacktrace --info
 
       - name: 📂 Prepare Release Artifacts
         run: |
