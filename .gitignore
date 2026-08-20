@@ -31,3 +31,16 @@ pnpm-debug.log*
 # AI Agents & VibeCoding artifacts
 .agents/
 .claude/
+# Android build artifacts & caches
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+.gradle/
+*.apk
+*.aab
+*.jks
+*.keystore
+build-outputs/
+release-assets/

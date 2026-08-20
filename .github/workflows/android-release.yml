@@ -1,0 +1,113 @@
+name: Android Release - Build & Publish APK/AAB
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release:
+    name: 🚀 Build & Release Android App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ☕ Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools cmdline-tools;latest'
+
+      - name: 📜 Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Android
+        run: pnpm run build:android
+
+      - name: 🔄 Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 🔑 Configure Android Signing
+        id: signing
+        run: |
+          mkdir -p $HOME/keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using production keystore from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/release.jks
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "Generating self-signed release keystore for release..."
+            keytool -genkey -v -keystore $HOME/keystore/release.jks \
+              -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass subvid123 -keypass subvid123 \
+              -dname "CN=Subvid App, OU=Mobile, O=Subvid, L=Unknown, S=Unknown, C=US"
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=subvid123" >> $GITHUB_ENV
+            echo "KEY_ALIAS=subvid" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
+          fi
+
+      - name: 🔨 Build Android Binaries
+        run: |
+          cd android
+          chmod +x gradlew
+          echo "==> Building Debug APK..."
+          ./gradlew assembleDebug --stacktrace --no-daemon
+          echo "==> Building Release APK..."
+          ./gradlew assembleRelease --stacktrace --no-daemon
+          echo "==> Building Release Bundle (AAB)..."
+          ./gradlew bundleRelease --stacktrace --no-daemon
+          
+          cd ..
+          mkdir -p release-assets
+          echo "==> Copying friendly named binaries to release-assets/..."
+          cp -fv android/app/build/outputs/apk/debug/*.apk release-assets/subvid-debug.apk || true
+          cp -fv android/app/build/outputs/apk/release/*.apk release-assets/subvid-release.apk || true
+          cp -fv android/app/build/outputs/bundle/release/*.aab release-assets/subvid-release.aab || true
+          ls -lah release-assets/
+
+      - name: 🚀 Create GitHub Release & Upload Direct APKs
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Subvid Android App ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/subvid-release.apk
+            release-assets/subvid-debug.apk
+            release-assets/subvid-release.aab

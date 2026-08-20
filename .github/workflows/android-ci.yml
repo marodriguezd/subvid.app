@@ -1,0 +1,187 @@
+name: Android CI/CD - Build & Test
+
+on:
+  push:
+    branches:
+      - main
+      - android-app
+  pull_request:
+    branches:
+      - main
+      - android-app
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type (all, debug, release)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - debug
+          - release
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-web:
+    name: 🌐 Build Web Assets (Astro Static)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Android
+        run: pnpm run build:android
+
+      - name: 📤 Upload static dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          retention-days: 7
+
+  build-android:
+    name: 🤖 Build Android APK & AAB
+    needs: build-web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools cmdline-tools;latest'
+
+      - name: 📜 Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 📥 Download web dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: 🔄 Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 🔑 Configure Android Signing
+        id: signing
+        run: |
+          mkdir -p $HOME/keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using production keystore from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/release.jks
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "Generating self-signed release keystore for immediate installation..."
+            keytool -genkey -v -keystore $HOME/keystore/release.jks \
+              -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass subvid123 -keypass subvid123 \
+              -dname "CN=Subvid App, OU=Mobile, O=Subvid, L=Unknown, S=Unknown, C=US"
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=subvid123" >> $GITHUB_ENV
+            echo "KEY_ALIAS=subvid" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
+          fi
+
+      - name: 🔨 Build Android Binaries (Debug APK, Release APK, AAB)
+        run: |
+          cd android
+          chmod +x gradlew
+          
+          echo "==> Building Debug APK..."
+          set +e
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log
+          DEBUG_EXIT=${PIPESTATUS[0]}
+          set -e
+          
+          if [ $DEBUG_EXIT -ne 0 ]; then
+            echo "::error title=Failing Task::$(grep -m 1 -A 2 'Execution failed for task' ../debug_build.log | tr '\n' ' ')"
+            echo "::error title=Root Cause::$(grep -m 1 -A 5 'Caused by:' ../debug_build.log | tr '\n' ' ')"
+            echo "::error title=Failure Summary::$(grep -A 10 'FAILURE:' ../debug_build.log | tr '\n' ' ')"
+            echo "==================== GRADLE ERROR LOG ===================="
+            grep -A 30 -B 5 "FAILURE:" ../debug_build.log || tail -n 80 ../debug_build.log
+            echo "=========================================================="
+            exit $DEBUG_EXIT
+          fi
+          
+          echo "==> Building Release APK..."
+          set +e
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log
+          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log
+          set -e
+          
+          cd ..
+          mkdir -p build-outputs
+          echo "==> Copying all APKs and AABs to build-outputs/..."
+          cp -fv android/app/build/outputs/apk/debug/*.apk build-outputs/subvid-debug.apk || true
+          cp -fv android/app/build/outputs/apk/release/*.apk build-outputs/subvid-release.apk || true
+          cp -fv android/app/build/outputs/bundle/release/*.aab build-outputs/subvid-release.aab || true
+          
+          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp -fv {} build-outputs/ \;
+          
+          echo "==> Final contents of build-outputs/:"
+          ls -lah build-outputs/
+
+      - name: 📤 Upload Android Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: subvid-android-binaries
+          path: build-outputs
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: 📤 Upload Build Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: "*.log"
+          if-no-files-found: ignore
+          retention-days: 7

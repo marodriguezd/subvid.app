@@ -38,7 +38,7 @@ self.onmessage = async (event: MessageEvent) => {
   try {
     if (type === "ensure-asr") {
       if (!recognizer) {
-        console.info("[ASR] loading Whisper model:", payload.model);
+        console.info("[ASR] loading Whisper model (prioritizing q8 8-bit quantization):", payload.model);
 
         const loadModel = async (extraOptions: Record<string, any>) => {
           return await pipeline("automatic-speech-recognition", payload.model, {
@@ -49,25 +49,44 @@ self.onmessage = async (event: MessageEvent) => {
         };
 
         try {
-          // Attempt 1: fp32 sub-models (highest compatibility on WASM/CPU)
+          // Priority 1: q8 quantized sub-models (50% less RAM, 2x-3x faster inference, ~75MB download)
           recognizer = await loadModel({
-            dtype: { encoder_model: "fp32", decoder_model_merged: "fp32" },
+            dtype: { encoder_model: "q8", decoder_model_merged: "q8" },
           });
+          console.info("[ASR] Loaded q8 sub-models successfully");
         } catch (e1) {
-          console.warn("[ASR] fp32 sub-models failed, trying fp32 string:", e1);
+          console.warn("[ASR] q8 sub-models failed, trying generic q8:", e1);
           try {
-            // Attempt 2: generic fp32
-            recognizer = await loadModel({ dtype: "fp32" });
+            // Priority 2: generic q8
+            recognizer = await loadModel({ dtype: "q8" });
+            console.info("[ASR] Loaded generic q8 successfully");
           } catch (e2) {
-            console.warn("[ASR] generic fp32 failed, trying default:", e2);
-            // Attempt 3: default transformers.js resolution
-            recognizer = await loadModel({});
+            console.warn("[ASR] generic q8 failed, trying fp32 sub-models:", e2);
+            try {
+              // Priority 3: fp32 sub-models
+              recognizer = await loadModel({
+                dtype: { encoder_model: "fp32", decoder_model_merged: "fp32" },
+              });
+              console.info("[ASR] Loaded fp32 sub-models successfully");
+            } catch (e3) {
+              console.warn("[ASR] fp32 sub-models failed, trying generic fp32:", e3);
+              try {
+                // Priority 4: generic fp32
+                recognizer = await loadModel({ dtype: "fp32" });
+                console.info("[ASR] Loaded generic fp32 successfully");
+              } catch (e4) {
+                console.warn("[ASR] generic fp32 failed, trying default:", e4);
+                // Priority 5: default resolution
+                recognizer = await loadModel({});
+                console.info("[ASR] Loaded default model successfully");
+              }
+            }
           }
         }
 
         recognizerDevice = "wasm";
         recognizerModel = payload.model;
-        console.info("[ASR] Whisper model loaded successfully on WASM/CPU");
+        console.info("[ASR] Whisper model ready on WASM/CPU");
       }
       post({ id, type: "done" });
     } else if (type === "transcribe") {

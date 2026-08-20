@@ -1,0 +1,57 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "app.subvid.android"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "app.subvid.android"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
+                storeFile file(System.getenv("KEYSTORE_PATH"))
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "subvid123"
+                keyAlias System.getenv("KEY_ALIAS") ?: "subvid"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "subvid123"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+}
+
+apply from: 'capacitor.build.gradle'

@@ -1,0 +1,31 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+subprojects {
+    ext.compileSdkVersion = 36
+    ext.targetSdkVersion = 36
+    ext.minSdkVersion = 24
+}
+
+task clean(type: Delete) {
+    delete rootProject.layout.buildDirectory
+}
