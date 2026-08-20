@@ -76,7 +76,7 @@ jobs:
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools cmdline-tools;latest'
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools cmdline-tools;latest'
 
       - name: 📜 Accept Android SDK Licenses
         run: yes | sdkmanager --licenses || true
@@ -142,7 +142,9 @@ jobs:
           set -e
           
           if [ $DEBUG_EXIT -ne 0 ]; then
-            echo "::error title=Gradle assembleDebug Failed::$(tail -n 25 ../debug_build.log | tr '\n' ' ')"
+            echo "::error title=Failing Task::$(grep -m 1 -A 2 'Execution failed for task' ../debug_build.log | tr '\n' ' ')"
+            echo "::error title=Root Cause::$(grep -m 1 -A 5 'Caused by:' ../debug_build.log | tr '\n' ' ')"
+            echo "::error title=Failure Summary::$(grep -A 10 'FAILURE:' ../debug_build.log | tr '\n' ' ')"
             echo "==================== GRADLE ERROR LOG ===================="
             grep -A 30 -B 5 "FAILURE:" ../debug_build.log || tail -n 80 ../debug_build.log
             echo "=========================================================="
