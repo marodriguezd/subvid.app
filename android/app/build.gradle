@@ -2,12 +2,12 @@ apply plugin: 'com.android.application'
 
 android {
     namespace = "app.subvid.android"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId "app.subvid.android"
         minSdkVersion 24
-        targetSdkVersion 36
+        targetSdkVersion 35
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -16,13 +16,14 @@ android {
         }
     }
 
-    signingConfigs {
-        release {
-            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
-                storeFile file(System.getenv("KEYSTORE_PATH"))
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+    def ksPath = System.getenv("KEYSTORE_PATH")
+    if (ksPath != null && file(ksPath).exists()) {
+        signingConfigs {
+            release {
+                storeFile file(ksPath)
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "subvid123"
                 keyAlias System.getenv("KEY_ALIAS") ?: "subvid"
-                keyPassword System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+                keyPassword System.getenv("KEY_PASSWORD") ?: "subvid123"
             }
         }
     }
@@ -31,23 +32,26 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
+            if (ksPath != null && file(ksPath).exists()) {
                 signingConfig signingConfigs.release
             }
+        }
+        debug {
+            debuggable true
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'androidx.appcompat:appcompat:1.7.1'
-    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.3.0'
-    implementation 'androidx.core:core-splashscreen:1.2.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
 }

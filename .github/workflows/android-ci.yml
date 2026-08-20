@@ -67,11 +67,11 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 21 (Temurin)
+      - name: ☕ Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -130,14 +130,22 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log || {
+            echo "::error::Gradle assembleDebug failed"
+            tail -n 120 ../debug_build.log
+            exit 1
+          }
 
       - name: 🔨 Build Release APK & Bundle (AAB)
         if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
+          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || {
+            echo "::error::Gradle assembleRelease failed"
+            tail -n 120 ../release_build.log
+            exit 1
+          }
 
       - name: 📂 Prepare Release Artifacts
         run: |
@@ -192,3 +200,11 @@ jobs:
           name: subvid-android-all-binaries
           path: build-outputs/
           retention-days: 30
+
+      - name: 📤 Upload Failure Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-failure-logs
+          path: "*.log"
+          retention-days: 7
