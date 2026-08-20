@@ -76,7 +76,10 @@ jobs:
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools cmdline-tools;latest'
+
+      - name: 📜 Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -131,18 +134,26 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          
           echo "==> Building Debug APK..."
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log || {
-            echo "::error::assembleDebug failed"
-            tail -n 100 ../debug_build.log
-            exit 1
-          }
+          set +e
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log
+          DEBUG_EXIT=${PIPESTATUS[0]}
+          set -e
+          
+          if [ $DEBUG_EXIT -ne 0 ]; then
+            echo "::error title=Gradle assembleDebug Failed::$(tail -n 25 ../debug_build.log | tr '\n' ' ')"
+            echo "==================== GRADLE ERROR LOG ===================="
+            grep -A 30 -B 5 "FAILURE:" ../debug_build.log || tail -n 80 ../debug_build.log
+            echo "=========================================================="
+            exit $DEBUG_EXIT
+          fi
           
           echo "==> Building Release APK..."
-          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || true
-          
-          echo "==> Building Release Bundle (AAB)..."
-          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log || true
+          set +e
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log
+          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log
+          set -e
           
           cd ..
           mkdir -p build-outputs
