@@ -67,14 +67,16 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 21 (Temurin)
+      - name: ☕ Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -130,11 +132,15 @@ jobs:
           cd android
           chmod +x gradlew
           echo "==> Building Debug APK..."
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          if ! ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log; then
+            echo "::error title=Debug Build Failed::$(tail -n 20 ../debug_build.log | tr '\n' ' ')"
+            tail -n 80 ../debug_build.log
+            exit 1
+          fi
           echo "==> Building Release APK..."
-          ./gradlew assembleRelease --stacktrace --no-daemon || true
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || true
           echo "==> Building Release Bundle (AAB)..."
-          ./gradlew bundleRelease --stacktrace --no-daemon || true
+          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log || true
           
           cd ..
           mkdir -p build-outputs
