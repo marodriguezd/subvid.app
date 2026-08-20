@@ -21,14 +21,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: ☕ Setup Java 17 (Temurin)
+      - name: ☕ Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools cmdline-tools;latest'
+
+      - name: 📜 Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -76,25 +81,33 @@ jobs:
             echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
           fi
 
-      - name: 🔨 Build Release APK & Bundle (AAB)
+      - name: 🔨 Build Android Binaries
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
-
-      - name: 📂 Prepare Release Artifacts
-        run: |
+          echo "==> Building Debug APK..."
+          ./gradlew assembleDebug --stacktrace --no-daemon
+          echo "==> Building Release APK..."
+          ./gradlew assembleRelease --stacktrace --no-daemon
+          echo "==> Building Release Bundle (AAB)..."
+          ./gradlew bundleRelease --stacktrace --no-daemon
+          
+          cd ..
           mkdir -p release-assets
-          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \;
+          echo "==> Copying friendly named binaries to release-assets/..."
+          cp -fv android/app/build/outputs/apk/debug/*.apk release-assets/subvid-debug.apk || true
+          cp -fv android/app/build/outputs/apk/release/*.apk release-assets/subvid-release.apk || true
+          cp -fv android/app/build/outputs/bundle/release/*.aab release-assets/subvid-release.aab || true
           ls -lah release-assets/
 
-      - name: 🚀 Create GitHub Release & Upload Artifacts
+      - name: 🚀 Create GitHub Release & Upload Direct APKs
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: "Subvid Android App ${{ github.ref_name }}"
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            release-assets/*
+            release-assets/subvid-release.apk
+            release-assets/subvid-debug.apk
+            release-assets/subvid-release.aab
