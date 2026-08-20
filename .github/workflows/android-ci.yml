@@ -132,11 +132,19 @@ jobs:
           cd android
           chmod +x gradlew
           echo "==> Building Debug APK..."
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log || {
+            echo "### ❌ Debug Build Failure" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 60 ../debug_build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+          
           echo "==> Building Release APK..."
-          ./gradlew assembleRelease --stacktrace --no-daemon || true
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || true
+          
           echo "==> Building Release Bundle (AAB)..."
-          ./gradlew bundleRelease --stacktrace --no-daemon || true
+          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log || true
           
           cd ..
           mkdir -p build-outputs
