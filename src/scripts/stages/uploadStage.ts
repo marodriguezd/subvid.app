@@ -144,6 +144,14 @@ export function createUploadStageController({
       return;
     }
 
+    // Guard: prevent WebView OOM / binder TransactionTooLarge on huge files
+    const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
+    if (file.size > MAX_SIZE) {
+      setStatus(`File too large (${prettifyBytes(file.size)}). Try a file under 100 MB.`, "error");
+      ui.input.value = "";
+      return;
+    }
+
     const isAudio = isAudioFile(file);
 
     resetDropzoneState();
@@ -152,13 +160,28 @@ export function createUploadStageController({
     const previousUrl = getVideoObjectUrl();
     if (previousUrl) URL.revokeObjectURL(previousUrl);
 
-    const videoObjectUrl = URL.createObjectURL(file);
+    let videoObjectUrl: string;
+    try {
+      videoObjectUrl = URL.createObjectURL(file);
+    } catch (e: any) {
+      setStatus(e?.message || "Failed to load file.", "error");
+      ui.input.value = "";
+      return;
+    }
     setSelectedVideoFile(file);
     setVideoObjectUrl(videoObjectUrl);
-    ui.video.src = videoObjectUrl;
-    ui.video.load();
-    ui.configVideo.src = videoObjectUrl;
-    ui.configVideo.load();
+    try {
+      ui.video.src = videoObjectUrl;
+      ui.video.load();
+    } catch (e: any) {
+      console.warn("[upload] video.load failed", e);
+    }
+    try {
+      ui.configVideo.src = videoObjectUrl;
+      ui.configVideo.load();
+    } catch (e: any) {
+      console.warn("[upload] configVideo.load failed", e);
+    }
 
     // Hide video elements and export options for audio-only files
     // Keep preview containers visible so subtitles can be displayed
@@ -269,6 +292,16 @@ export function createUploadStageController({
 
   function wireUploadStage() {
     attachGlobalDrop();
+    // Prevent WebView crash on unsupported codecs (e.g. hevc) – show status instead of killing process
+    const onVideoError = () => {
+      const err = (ui.video.error as any)?.message || "Video preview failed (unsupported codec). Audio extraction may still work – try Generate.";
+      console.warn("[upload] video preview error", err, ui.video.error);
+      // Keep file selected; user can still try transcription via FFmpeg (supports hevc via libx265)
+      setStatus(err, "error");
+    };
+    ui.video.addEventListener("error", onVideoError);
+    ui.configVideo.addEventListener("error", onVideoError);
+
     ui.dropzone.addEventListener("click", () => ui.input.click());
     ui.dropzone.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -278,7 +311,15 @@ export function createUploadStageController({
     });
     ui.input.addEventListener("change", (event) => {
       const target = event.target as HTMLInputElement | null;
-      handleSelectedFile(target?.files?.[0]);
+      try {
+        handleSelectedFile(target?.files?.[0]);
+      } catch (e: any) {
+        console.error("[upload] handleSelectedFile crash", e);
+        setStatus(e?.message || "Failed to load file.", "error");
+      } finally {
+        // Always clear input so same file can be re-selected after error
+        if (target) target.value = "";
+      }
     });
     ui.configBackBtn.addEventListener("click", resetFlow);
   }
