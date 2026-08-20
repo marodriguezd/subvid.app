@@ -83,6 +83,9 @@ export const ui = {
       qualityOptimized: "Optimized",
       qualityHigh: "High",
       qualityLossless: "Lossless",
+      tabSubtitles: "Subtitles",
+      tabStyle: "Style",
+      tabTimeline: "Timeline",
     },
     status: {
       modelsAria: "Models status",
@@ -358,6 +361,9 @@ export const ui = {
       qualityOptimized: "Optimizado",
       qualityHigh: "Alta",
       qualityLossless: "Sin pérdida",
+      tabSubtitles: "Subtítulos",
+      tabStyle: "Estilo",
+      tabTimeline: "Línea de tiempo",
     },
     status: {
       modelsAria: "Estado de los modelos",

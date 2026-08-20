@@ -1,6 +1,6 @@
 import { baseFileName } from "@/scripts/file.ts"
 import type { Stage } from "@/scripts/stageManager.ts"
-import { buildSrt } from "@/scripts/subtitles.ts"
+import { buildSrt, formatClock } from "@/scripts/subtitles.ts"
 import type { ui as appUi } from "@/scripts/ui.ts"
 
 type Segment = { start: number; end: number; text: string }
@@ -118,12 +118,60 @@ export function createEditorStageController({
     }
   }
 
+  function updateMobileClock() {
+    if (ui.mobileClock && ui.video) {
+      const cur = formatClock(ui.video.currentTime || 0)
+      const dur = formatClock(ui.video.duration || 0)
+      ui.mobileClock.textContent = `${cur} / ${dur}`
+    }
+  }
+
   function wireEditorStage() {
     ui.backBtn.addEventListener("click", backToConfig)
     ui.undoBtn?.addEventListener("click", undo)
     ui.redoBtn?.addEventListener("click", redo)
     ui.downloadSrtBtn.addEventListener("click", downloadSrt)
     document.addEventListener("keydown", handleKeyboardShortcut)
+
+    // Mobile studio mode switcher (CapCut / OpenCap tabs)
+    if (ui.mobileEditorTabs) {
+      const tabs = ui.mobileEditorTabs.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn")
+      tabs.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.dataset.tab
+          if (tab && ui.stageEditor) {
+            ui.stageEditor.dataset.mobileTab = tab
+            tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === tab))
+          }
+        })
+      })
+    }
+
+    // Mobile player controls
+    ui.mobilePlayBtn?.addEventListener("click", () => {
+      if (ui.video.paused) ui.video.play().catch(() => {})
+      else ui.video.pause()
+    })
+
+    ui.mobileFsBtn?.addEventListener("click", () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {})
+      } else if (ui.videoPreview?.requestFullscreen) {
+        ui.videoPreview.requestFullscreen().catch(() => {})
+      } else if ((ui.video as any)?.webkitEnterFullscreen) {
+        ;(ui.video as any).webkitEnterFullscreen()
+      }
+    })
+
+    ui.video.addEventListener("play", () => {
+      ui.stageEditor?.classList.add("is-playing")
+    })
+    ui.video.addEventListener("pause", () => {
+      ui.stageEditor?.classList.remove("is-playing")
+    })
+    ui.video.addEventListener("timeupdate", updateMobileClock)
+    ui.video.addEventListener("seeked", updateMobileClock)
+    ui.video.addEventListener("loadedmetadata", updateMobileClock)
   }
 
   return {

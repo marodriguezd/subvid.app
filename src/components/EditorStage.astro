@@ -3,6 +3,9 @@ import ChevronLeft from "@/assets/svg/chevron-left.svg"
 import Download from "@/assets/svg/download.svg"
 import Undo from "@/assets/svg/undo.svg"
 import Redo from "@/assets/svg/redo.svg"
+import Play from "@/assets/svg/play.svg"
+import Pause from "@/assets/svg/pause.svg"
+import Fullscreen from "@/assets/svg/fullscreen.svg"
 import SubtitleStyleBar from "@/components/SubtitleStyleBar.astro"
 import EditorSidebar from "@/components/EditorSidebar.astro"
 import Timeline from "@/components/Timeline.astro"
@@ -11,11 +14,11 @@ import { useTranslations } from "@/i18n/ui"
 const t = useTranslations(Astro.currentLocale)
 ---
 
-<section id="stage-editor" class="stage-editor" hidden>
+<section id="stage-editor" class="stage-editor" data-mobile-tab="subtitles" hidden>
   <header class="editor-top">
     <button id="back-btn" class="btn-ghost" type="button">
       <ChevronLeft />
-      {t.editor.back}
+      <span>{t.editor.back}</span>
     </button>
     <div class="editor-history">
       <button
@@ -44,7 +47,7 @@ const t = useTranslations(Astro.currentLocale)
     <div class="editor-actions">
       <button id="download-srt-btn" class="btn-soft" type="button" disabled>
         <Download />
-        {t.editor.downloadSrt}
+        <span>{t.editor.downloadSrt}</span>
       </button>
       <div class="export-options" aria-label={t.editor.videoExportOptions}>
         <label class="export-field" for="export-format">
@@ -70,7 +73,7 @@ const t = useTranslations(Astro.currentLocale)
         disabled
       >
         <Download />
-        {t.editor.downloadVideo}
+        <span>{t.editor.downloadVideo}</span>
       </button>
     </div>
   </header>
@@ -96,11 +99,50 @@ const t = useTranslations(Astro.currentLocale)
         </div>
       </div>
 
-      <SubtitleStyleBar />
+      <!-- Quick mobile player controls -->
+      <div class="mobile-player-bar">
+        <button id="mobile-play-btn" class="mobile-play-btn" type="button" aria-label={t.timeline.playPause}>
+          <Play class="ic-play" />
+          <Pause class="ic-pause" />
+        </button>
+        <span id="mobile-clock" class="mobile-clock">0:00.00 / 0:00.00</span>
+        <div class="mobile-player-tools">
+          <button id="mobile-fs-btn" class="mobile-icon-btn" type="button" aria-label={t.timeline.fullscreen}>
+            <Fullscreen class="ic-fs" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile CapCut / OpenCap studio navigation bar -->
+      <nav class="mobile-editor-tabs" id="mobile-editor-tabs" aria-label="Studio mode">
+        <button class="mobile-tab-btn is-active" type="button" data-tab="subtitles">
+          <span class="tab-icon">💬</span>
+          <span>{t.editor.tabSubtitles}</span>
+        </button>
+        <button class="mobile-tab-btn" type="button" data-tab="style">
+          <span class="tab-icon">🎨</span>
+          <span>{t.editor.tabStyle}</span>
+        </button>
+        <button class="mobile-tab-btn" type="button" data-tab="timeline">
+          <span class="tab-icon">⏱️</span>
+          <span>{t.editor.tabTimeline}</span>
+        </button>
+      </nav>
+
+      <!-- Style panel -->
+      <div class="style-bar-container" data-panel="style">
+        <SubtitleStyleBar />
+      </div>
     </div>
 
-    <EditorSidebar />
+    <!-- Sidebar segments panel -->
+    <div class="sidebar-container" data-panel="subtitles">
+      <EditorSidebar />
+    </div>
   </div>
 
-  <Timeline />
+  <!-- Timeline bottom panel -->
+  <div class="timeline-container" data-panel="timeline">
+    <Timeline />
+  </div>
 </section>
