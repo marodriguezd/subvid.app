@@ -17,6 +17,9 @@ jobs:
   build-desktop:
     name: 🖥️ Build Desktop App (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +69,6 @@ jobs:
 
       - name: 🪟 Package Electron for Windows
         if: matrix.platform == 'windows'
-        shell: bash
         run: |
           pnpm run electron:dist:win
           mkdir -p build-outputs

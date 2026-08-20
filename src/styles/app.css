@@ -1,7 +1,16 @@
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
 body {
   background: #06080b;
   color: #e2e6ee;
   font-family: "Outfit", "Segoe UI", sans-serif;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── Scrollbars: thin, transparent track, green thumb ── */
@@ -26,7 +35,8 @@ body {
 
 .app {
   min-height: 100vh;
-  padding: 1.5rem;
+  min-height: 100dvh;
+  padding: max(1.5rem, calc(var(--safe-area-top) + 0.75rem)) max(1rem, var(--safe-area-right)) max(1.5rem, calc(var(--safe-area-bottom) + 0.75rem)) max(1rem, var(--safe-area-left));
   display: grid;
   place-items: center;
   position: relative;
@@ -76,8 +86,8 @@ body {
 }
 .status-dock {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: max(1rem, calc(var(--safe-area-top) + 0.5rem));
+  right: max(1rem, calc(var(--safe-area-right) + 0.5rem));
   z-index: 40;
   display: flex;
   align-items: center;
@@ -184,8 +194,8 @@ body {
 
 .status-panel {
   position: fixed;
-  top: 3.8rem;
-  right: 1rem;
+  top: calc(max(1rem, calc(var(--safe-area-top) + 0.5rem)) + 2.8rem);
+  right: max(1rem, calc(var(--safe-area-right) + 0.5rem));
   z-index: 40;
   width: min(330px, calc(100vw - 2rem));
   background: rgba(12, 15, 20, 0.86);
