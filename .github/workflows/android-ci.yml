@@ -130,44 +130,34 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log || {
-            echo "::error::Gradle assembleDebug failed"
-            tail -n 120 ../debug_build.log
-            exit 1
-          }
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: 🔨 Build Release APK & Bundle (AAB)
         if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || {
-            echo "::error::Gradle assembleRelease failed"
-            tail -n 120 ../release_build.log
-            exit 1
-          }
+          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
 
       - name: 📂 Prepare Release Artifacts
         run: |
           mkdir -p build-outputs
+          echo "Listing all built binaries from Gradle:"
+          find android/app/build/outputs/ -type f || true
+          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} build-outputs/ \;
           
-          # Debug APK
-          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-outputs/subvid-debug.apk
-          fi
-          
-          # Release APK
-          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk build-outputs/subvid-release.apk
-          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-outputs/subvid-release-unsigned.apk
-          fi
-          
-          # Android App Bundle (AAB)
-          if [ -f "android/app/build/outputs/bundle/release/app-release.aab" ]; then
-            cp android/app/build/outputs/bundle/release/app-release.aab build-outputs/subvid-release.aab
-          fi
+          # Friendly standard aliases
+          for f in build-outputs/*debug*.apk; do
+            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-debug.apk; break; fi
+          done
+          for f in build-outputs/*release*.apk; do
+            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-release.apk; break; fi
+          done
+          for f in build-outputs/*release*.aab; do
+            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-release.aab; break; fi
+          done
 
+          echo "Final build outputs:"
           ls -lah build-outputs/
 
       - name: 📤 Upload Debug APK
@@ -175,7 +165,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: subvid-debug-apk
-          path: build-outputs/subvid-debug.apk
+          path: build-outputs/*debug*.apk
+          if-no-files-found: warn
           retention-days: 14
 
       - name: 📤 Upload Release APK
@@ -183,7 +174,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: subvid-release-apk
-          path: build-outputs/subvid-release*.apk
+          path: build-outputs/*release*.apk
+          if-no-files-found: warn
           retention-days: 30
 
       - name: 📤 Upload Release App Bundle (AAB)
@@ -191,7 +183,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: subvid-release-aab
-          path: build-outputs/subvid-release.aab
+          path: build-outputs/*.aab
+          if-no-files-found: warn
           retention-days: 30
 
       - name: 📤 Upload All Android Artifacts Combined
@@ -199,12 +192,5 @@ jobs:
         with:
           name: subvid-android-all-binaries
           path: build-outputs/
+          if-no-files-found: error
           retention-days: 30
-
-      - name: 📤 Upload Failure Logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-failure-logs
-          path: "*.log"
-          retention-days: 7

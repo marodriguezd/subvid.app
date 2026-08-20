@@ -21,11 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: ☕ Setup Java 21 (Temurin)
+      - name: ☕ Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -85,24 +85,7 @@ jobs:
       - name: 📂 Prepare Release Artifacts
         run: |
           mkdir -p release-assets
-          
-          # Debug APK
-          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/subvid-debug.apk
-          fi
-          
-          # Release APK
-          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk release-assets/subvid-release.apk
-          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/subvid-release-unsigned.apk
-          fi
-          
-          # Android App Bundle (AAB)
-          if [ -f "android/app/build/outputs/bundle/release/app-release.aab" ]; then
-            cp android/app/build/outputs/bundle/release/app-release.aab release-assets/subvid-release.aab
-          fi
-
+          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \;
           ls -lah release-assets/
 
       - name: 🚀 Create GitHub Release & Upload Artifacts
