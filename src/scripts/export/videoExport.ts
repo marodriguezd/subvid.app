@@ -187,11 +187,26 @@ export function createVideoExporter(options: VideoExportOptions) {
     return candidates[0]
   }
 
-  function downloadBlob(blob: Blob, settings: ExportSettings) {
+  async function downloadBlob(blob: Blob, settings: ExportSettings) {
+    const filename = `${baseFileName()}.${activeLang()}.${settings.format}`
+    try {
+      if (typeof navigator !== "undefined" && navigator.canShare) {
+        const mimeType = blob.type || (settings.format === "webm" ? "video/webm" : "video/mp4")
+        const file = new File([blob], filename, { type: mimeType })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: filename,
+          })
+          return
+        }
+      }
+    } catch {}
+
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.download = `${baseFileName()}.${activeLang()}.${settings.format}`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
   }

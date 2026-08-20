@@ -1,0 +1,194 @@
+name: Android CI/CD - Build & Test
+
+on:
+  push:
+    branches:
+      - main
+      - android-app
+  pull_request:
+    branches:
+      - main
+      - android-app
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type (all, debug, release)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - debug
+          - release
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-web:
+    name: 🌐 Build Web Assets (Astro Static)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Android
+        run: pnpm run build:android
+
+      - name: 📤 Upload static dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 7
+
+  build-android:
+    name: 🤖 Build Android APK & AAB
+    needs: build-web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 📥 Download web dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: 🔄 Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 🔑 Configure Android Signing
+        id: signing
+        run: |
+          mkdir -p $HOME/keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using production keystore from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/release.jks
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "Generating self-signed release keystore for immediate installation..."
+            keytool -genkey -v -keystore $HOME/keystore/release.jks \
+              -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass subvid123 -keypass subvid123 \
+              -dname "CN=Subvid App, OU=Mobile, O=Subvid, L=Unknown, S=Unknown, C=US"
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=subvid123" >> $GITHUB_ENV
+            echo "KEY_ALIAS=subvid" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
+          fi
+
+      - name: 🔨 Build Debug APK
+        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'debug' || github.event_name != 'workflow_dispatch' }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 🔨 Build Release APK & Bundle (AAB)
+        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease --stacktrace
+
+      - name: 📂 Prepare Release Artifacts
+        run: |
+          mkdir -p build-outputs
+          
+          # Debug APK
+          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-outputs/subvid-debug.apk
+          fi
+          
+          # Release APK
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk build-outputs/subvid-release.apk
+          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-outputs/subvid-release-unsigned.apk
+          fi
+          
+          # Android App Bundle (AAB)
+          if [ -f "android/app/build/outputs/bundle/release/app-release.aab" ]; then
+            cp android/app/build/outputs/bundle/release/app-release.aab build-outputs/subvid-release.aab
+          fi
+
+          ls -lah build-outputs/
+
+      - name: 📤 Upload Debug APK
+        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'debug' || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: subvid-debug-apk
+          path: build-outputs/subvid-debug.apk
+          retention-days: 14
+
+      - name: 📤 Upload Release APK
+        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: subvid-release-apk
+          path: build-outputs/subvid-release*.apk
+          retention-days: 30
+
+      - name: 📤 Upload Release App Bundle (AAB)
+        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: subvid-release-aab
+          path: build-outputs/subvid-release.aab
+          retention-days: 30
+
+      - name: 📤 Upload All Android Artifacts Combined
+        uses: actions/upload-artifact@v4
+        with:
+          name: subvid-android-all-binaries
+          path: build-outputs/
+          retention-days: 30

@@ -49,17 +49,33 @@ export function createEditorStageController({
     setStage("config")
   }
 
-  function downloadSrt() {
+  async function downloadSrt() {
     const segments = currentSegments()
     if (!segments.length) return
 
-    const blob = new Blob([buildSrt(segments)], {
+    const srtContent = buildSrt(segments)
+    const filename = `${baseFileName(selectedVideoFile())}.${activeLang()}.srt`
+    const blob = new Blob([srtContent], {
       type: "text/plain;charset=utf-8",
     })
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.canShare) {
+        const file = new File([blob], filename, { type: "text/plain" })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: filename,
+          })
+          return
+        }
+      }
+    } catch {}
+
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.download = `${baseFileName(selectedVideoFile())}.${activeLang()}.srt`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
   }

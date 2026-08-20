@@ -87,9 +87,19 @@ No environment variables or external services are required for local development
 | --- | --- |
 | `pnpm dev` | Start Astro dev server at `localhost:4321` |
 | `pnpm build` | Build the production site to `./dist/` |
+| `pnpm build:android` | Build static web application for Android |
+| `pnpm android:sync` | Build and sync static assets with Capacitor Android |
 | `pnpm preview` | Preview the production build locally |
 | `pnpm preview:cf` | Build and preview with Wrangler (Cloudflare Workers runtime) |
 | `pnpm deploy` | Build and deploy to Cloudflare Workers |
+
+## 📱 Android App (CI/CD Builds)
+
+Subvid is fully compatible with Android via Capacitor. Native Android APKs and AAB bundles are built automatically in the cloud with **GitHub Actions**:
+
+- **CI/CD Pipeline:** `.github/workflows/android-ci.yml` triggers on push/PR and builds `subvid-debug.apk`, signed `subvid-release.apk`, and `subvid-release.aab`.
+- **Automated Releases:** `.github/workflows/android-release.yml` publishes APK releases on tag push (`v*`).
+- **Complete Android Docs:** See [ANDROID.md](ANDROID.md) for full architecture and setup details.
 
 ## Project structure
 

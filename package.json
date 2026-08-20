@@ -9,9 +9,15 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "build:web": "astro build",
+    "build:android": "astro build --config astro.config.android.mjs",
     "preview": "astro preview",
     "astro": "astro",
-    "deploy": "astro build && wrangler deploy"
+    "deploy": "astro build && wrangler deploy",
+    "cap": "cap",
+    "android:sync": "pnpm run build:android && cap sync android",
+    "android:copy": "pnpm run build:android && cap copy android",
+    "android:open": "cap open android"
   },
   "dependencies": {
     "@astrojs/cloudflare": "13.6.0",
@@ -26,6 +32,9 @@
     "tailwindcss": "4.3.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "wrangler": "4.98.0"
   }
 }

@@ -1,0 +1,142 @@
+name: Android Release Publisher
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_title:
+        description: 'Release Title'
+        required: false
+        default: 'Subvid Android App Release'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-publish-release:
+    name: 🚀 Build & Publish Android Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ☕ Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Android
+        run: pnpm run build:android
+
+      - name: 🔄 Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 🔑 Configure Android Signing
+        id: signing
+        run: |
+          mkdir -p $HOME/keystore
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using production keystore from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/release.jks
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "Generating self-signed release keystore..."
+            keytool -genkey -v -keystore $HOME/keystore/release.jks \
+              -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass subvid123 -keypass subvid123 \
+              -dname "CN=Subvid App, OU=Mobile, O=Subvid, L=Unknown, S=Unknown, C=US"
+            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=subvid123" >> $GITHUB_ENV
+            echo "KEY_ALIAS=subvid" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
+          fi
+
+      - name: 🔨 Build Release APK & Bundle (AAB)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease bundleRelease --stacktrace
+
+      - name: 📂 Prepare Release Artifacts
+        run: |
+          mkdir -p release-assets
+          
+          # Debug APK
+          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/subvid-debug.apk
+          fi
+          
+          # Release APK
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk release-assets/subvid-release.apk
+          fi
+          
+          # Android App Bundle (AAB)
+          if [ -f "android/app/build/outputs/bundle/release/app-release.aab" ]; then
+            cp android/app/build/outputs/bundle/release/app-release.aab release-assets/subvid-release.aab
+          fi
+
+          ls -lah release-assets/
+
+      - name: 🚀 Create GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: ${{ github.event.inputs.release_title || github.ref_name }}
+          body: |
+            ## 📱 Subvid Android App
+            
+            Subvid mobile release for Android! Generate, edit, translate, and export subtitles on Android devices.
+            
+            ### 📥 Downloads
+            - **`subvid-release.apk`**: Production Signed APK for direct installation on Android devices.
+            - **`subvid-debug.apk`**: Debug APK for testing.
+            - **`subvid-release.aab`**: Android App Bundle ready for Google Play Store upload.
+            
+            ### 🚀 Features in Android App
+            - 100% Client-side AI Whisper transcription & NLLB translation.
+            - Local video/audio subtitle burning and .srt export with native Android Share/Save.
+            - Offline model caching via IndexedDB.
+            - Hardware acceleration and high-performance WebAssembly.
+          files: |
+            release-assets/subvid-release.apk
+            release-assets/subvid-debug.apk
+            release-assets/subvid-release.aab
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
