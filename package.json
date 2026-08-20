@@ -1,7 +1,11 @@
 {
   "name": "subvid.app",
+  "productName": "Subvid",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "main": "electron/main.cjs",
+  "description": "AI-powered subtitle generator and video subtitle translator running 100% locally.",
+  "author": "Subvid Team",
   "license": "PolyForm-Noncommercial-1.0.0",
   "engines": {
     "node": ">=22.12.0"
@@ -10,7 +14,15 @@
     "dev": "astro dev",
     "build": "astro build",
     "build:web": "astro build",
+    "build:desktop": "astro build --config astro.config.desktop.mjs",
     "build:android": "astro build --config astro.config.android.mjs",
+    "electron:dev": "astro build --config astro.config.desktop.mjs && electron .",
+    "electron:pack": "pnpm run build:desktop && electron-builder --dir",
+    "electron:dist": "pnpm run build:desktop && electron-builder",
+    "electron:dist:linux": "pnpm run build:desktop && electron-builder --linux",
+    "electron:dist:win": "pnpm run build:desktop && electron-builder --win",
+    "electron:dist:mac": "pnpm run build:desktop && electron-builder --mac",
+    "electron:dist:all": "pnpm run build:desktop && electron-builder -mwl",
     "preview": "astro preview",
     "astro": "astro",
     "deploy": "astro build && wrangler deploy",
@@ -35,6 +47,13 @@
     "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
     "wrangler": "4.98.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   }
 }

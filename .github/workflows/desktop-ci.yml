@@ -1,0 +1,90 @@
+name: Desktop CI/CD - Build & Package Electron App
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-desktop:
+    name: 🖥️ Build Desktop App (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: subvid-desktop-linux
+          - os: windows-latest
+            platform: windows
+            artifact_name: subvid-desktop-windows
+          - os: macos-latest
+            platform: macos
+            artifact_name: subvid-desktop-macos
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "0"
+        run: |
+          rm -f .npmrc || true
+          pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Desktop
+        run: pnpm run build:desktop
+
+      - name: 🐧 Package Electron for Linux
+        if: matrix.platform == 'linux'
+        run: |
+          pnpm run electron:dist:linux
+          mkdir -p build-outputs
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.tar.gz" \) -exec cp -fv {} build-outputs/ \;
+          ls -lah build-outputs/
+
+      - name: 🪟 Package Electron for Windows
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          pnpm run electron:dist:win
+          mkdir -p build-outputs
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.exe" \) -exec cp -fv {} build-outputs/ \;
+          ls -lah build-outputs/
+
+      - name: 🍎 Package Electron for macOS
+        if: matrix.platform == 'macos'
+        run: |
+          pnpm run electron:dist:mac
+          mkdir -p build-outputs
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.dmg" -o -name "*.zip" \) -exec cp -fv {} build-outputs/ \;
+          ls -lah build-outputs/
+
+      - name: 📤 Upload Desktop Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build-outputs
+          if-no-files-found: warn
+          retention-days: 30

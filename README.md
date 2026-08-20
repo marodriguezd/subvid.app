@@ -154,9 +154,36 @@ You need a [Cloudflare account](https://dash.cloudflare.com) and Wrangler authen
 
 subvid.app is designed around local-first processing:
 
-- Videos are read from disk via the File API — never uploaded.
-- AI models run in Web Workers with WASM/WebGPU.
-- No analytics backend or user accounts in this codebase.
+## 🖥️ Desktop Application (Electron for PC)
+
+Subvid is available as a native PC desktop application for Linux, Windows, and macOS:
+
+```sh
+# Build static desktop assets
+pnpm run build:desktop
+
+# Run locally in Electron
+pnpm run electron:dev
+
+# Package executables (.AppImage, .deb, .exe, .dmg)
+pnpm run electron:dist
+```
+
+See [DESKTOP.md](DESKTOP.md) for full desktop build and distribution details.
+
+## 📱 Android Application (Capacitor)
+
+Subvid runs natively on Android devices (APK and AAB Google Play bundles):
+
+```sh
+# Build Android static web assets
+pnpm run build:android
+
+# Sync Capacitor Android project
+pnpm run android:sync
+```
+
+See [ANDROID.md](ANDROID.md) for Android setup, permissions, and CI/CD details.
 
 ## License
 
@@ -165,3 +192,4 @@ See the repository for license details.
 ## Author
 
 Built by [midudev](https://midu.dev).
+

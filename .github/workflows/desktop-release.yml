@@ -1,0 +1,88 @@
+name: Desktop Release - Build & Publish Multiplatform Executables
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release-desktop:
+    name: 🚀 Build & Release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "0"
+        run: |
+          rm -f .npmrc || true
+          pnpm install --no-frozen-lockfile
+
+      - name: 🔨 Build static web app for Desktop
+        run: pnpm run build:desktop
+
+      - name: 🐧 Package Electron for Linux
+        if: matrix.platform == 'linux'
+        run: |
+          pnpm run electron:dist:linux
+          mkdir -p release-assets
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.tar.gz" \) -exec cp -fv {} release-assets/ \;
+          ls -lah release-assets/
+
+      - name: 🪟 Package Electron for Windows
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          pnpm run electron:dist:win
+          mkdir -p release-assets
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.exe" \) -exec cp -fv {} release-assets/ \;
+          ls -lah release-assets/
+
+      - name: 🍎 Package Electron for macOS
+        if: matrix.platform == 'macos'
+        run: |
+          pnpm run electron:dist:mac
+          mkdir -p release-assets
+          find dist-electron/ -maxdepth 1 -type f \( -name "*.dmg" -o -name "*.zip" \) -exec cp -fv {} release-assets/ \;
+          ls -lah release-assets/
+
+      - name: 🚀 Upload Executables to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Subvid ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/*
