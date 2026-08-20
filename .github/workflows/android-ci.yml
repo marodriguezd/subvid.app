@@ -67,16 +67,16 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 17 (Temurin)
+      - name: ☕ Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0-rc1 build-tools;35.0.0 platform-tools'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
@@ -145,7 +145,6 @@ jobs:
           cp -fv android/app/build/outputs/apk/release/*.apk build-outputs/subvid-release.apk || true
           cp -fv android/app/build/outputs/bundle/release/*.aab build-outputs/subvid-release.aab || true
           
-          # Fallback recursive copy of any additional generated binaries
           find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp -fv {} build-outputs/ \;
           
           echo "==> Final contents of build-outputs/:"
