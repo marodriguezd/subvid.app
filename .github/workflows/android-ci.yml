@@ -67,11 +67,11 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 17 (Temurin)
+      - name: ☕ Setup Java 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
