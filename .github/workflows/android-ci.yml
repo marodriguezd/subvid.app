@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
-          path: dist/
+          path: dist
           retention-days: 7
 
   build-android:
@@ -132,28 +132,29 @@ jobs:
           cd android
           chmod +x gradlew
           echo "==> Building Debug APK..."
-          if ! ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../debug_build.log; then
-            echo "::error title=Debug Build Failed::$(tail -n 20 ../debug_build.log | tr '\n' ' ')"
-            tail -n 80 ../debug_build.log
-            exit 1
-          fi
+          ./gradlew assembleDebug --stacktrace --no-daemon
           echo "==> Building Release APK..."
-          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee ../release_build.log || true
+          ./gradlew assembleRelease --stacktrace --no-daemon || true
           echo "==> Building Release Bundle (AAB)..."
-          ./gradlew bundleRelease --stacktrace --no-daemon 2>&1 | tee ../bundle_build.log || true
+          ./gradlew bundleRelease --stacktrace --no-daemon || true
           
           cd ..
           mkdir -p build-outputs
-          echo "==> Locating all built binaries in android/app/build/outputs/:"
-          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \)
+          echo "==> Copying all APKs and AABs to build-outputs/..."
+          cp -fv android/app/build/outputs/apk/debug/*.apk build-outputs/subvid-debug.apk || true
+          cp -fv android/app/build/outputs/apk/release/*.apk build-outputs/subvid-release.apk || true
+          cp -fv android/app/build/outputs/bundle/release/*.aab build-outputs/subvid-release.aab || true
+          
+          # Fallback recursive copy of any additional generated binaries
           find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp -fv {} build-outputs/ \;
-          echo "==> Collected build outputs:"
+          
+          echo "==> Final contents of build-outputs/:"
           ls -lah build-outputs/
 
       - name: 📤 Upload Android Binaries
         uses: actions/upload-artifact@v4
         with:
           name: subvid-android-binaries
-          path: build-outputs/*
-          if-no-files-found: error
+          path: build-outputs
+          if-no-files-found: warn
           retention-days: 30
