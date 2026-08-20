@@ -62,14 +62,29 @@ self.onmessage = async (event: MessageEvent) => {
       }
       post({ id, type: "done" });
     } else if (type === "transcribe") {
-      const output = await recognizer(payload.audio, {
-        chunk_length_s: 30,
-        stride_length_s: 5,
-        return_timestamps: payload.wordTimestamps ? "word" : true,
-        language: payload.language || null,
-        chunk_callback: () => post({ type: "chunk" }),
-      });
-      post({ id, type: "done", result: output });
+      let output
+      try {
+        output = await recognizer(payload.audio, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          return_timestamps: payload.wordTimestamps ? "word" : true,
+          language: payload.language || null,
+          chunk_callback: () => post({ type: "chunk" }),
+        })
+      } catch (err1: any) {
+        console.warn(
+          "[ASR] word timestamps failed, falling back to segment timestamps:",
+          err1,
+        )
+        output = await recognizer(payload.audio, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          return_timestamps: true,
+          language: payload.language || null,
+          chunk_callback: () => post({ type: "chunk" }),
+        })
+      }
+      post({ id, type: "done", result: output })
     } else {
       post({ id, type: "error", error: `Unknown message type: ${type}` });
     }
