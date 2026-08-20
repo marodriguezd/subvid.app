@@ -42,5 +42,6 @@ android/captures/
 *.aab
 *.jks
 *.keystore
+!android/app/subvid.keystore
 build-outputs/
 release-assets/

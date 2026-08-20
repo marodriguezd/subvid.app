@@ -110,21 +110,16 @@ jobs:
       - name: 🔑 Configure Android Signing
         id: signing
         run: |
-          mkdir -p $HOME/keystore
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "Using production keystore from secrets..."
+            echo "Using custom production keystore from secrets..."
+            mkdir -p $HOME/keystore
             echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/release.jks
             echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
             echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
             echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
             echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
           else
-            echo "Generating self-signed release keystore for immediate installation..."
-            keytool -genkey -v -keystore $HOME/keystore/release.jks \
-              -alias subvid -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass subvid123 -keypass subvid123 \
-              -dname "CN=Subvid App, OU=Mobile, O=Subvid, L=Unknown, S=Unknown, C=US"
-            echo "KEYSTORE_PATH=$HOME/keystore/release.jks" >> $GITHUB_ENV
+            echo "Using repo-level permanent universal keystore (subvid.keystore)..."
             echo "KEYSTORE_PASSWORD=subvid123" >> $GITHUB_ENV
             echo "KEY_ALIAS=subvid" >> $GITHUB_ENV
             echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV

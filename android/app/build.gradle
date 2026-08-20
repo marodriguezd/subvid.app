@@ -8,8 +8,8 @@ android {
         applicationId "app.subvid.android"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
@@ -17,13 +17,17 @@ android {
     }
 
     signingConfigs {
-        release {
+        shared {
+            def keystoreFile = file("subvid.keystore")
             if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
-                storeFile file(System.getenv("KEYSTORE_PATH"))
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "subvid123"
-                keyAlias System.getenv("KEY_ALIAS") ?: "subvid"
-                keyPassword System.getenv("KEY_PASSWORD") ?: "subvid123"
+                keystoreFile = file(System.getenv("KEYSTORE_PATH"))
             }
+            storeFile keystoreFile
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "subvid123"
+            keyAlias System.getenv("KEY_ALIAS") ?: "subvid"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "subvid123"
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
 
@@ -31,12 +35,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig signingConfigs.shared
         }
         debug {
             debuggable true
+            signingConfig signingConfigs.shared
         }
     }
 
