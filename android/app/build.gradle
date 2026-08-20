@@ -16,11 +16,10 @@ android {
         }
     }
 
-    def ksPath = System.getenv("KEYSTORE_PATH")
-    if (ksPath != null && file(ksPath).exists()) {
-        signingConfigs {
-            release {
-                storeFile file(ksPath)
+    signingConfigs {
+        release {
+            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
+                storeFile file(System.getenv("KEYSTORE_PATH"))
                 storePassword System.getenv("KEYSTORE_PASSWORD") ?: "subvid123"
                 keyAlias System.getenv("KEY_ALIAS") ?: "subvid"
                 keyPassword System.getenv("KEY_PASSWORD") ?: "subvid123"
@@ -32,7 +31,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (ksPath != null && file(ksPath).exists()) {
+            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
                 signingConfig signingConfigs.release
             }
         }
@@ -53,7 +52,6 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
-    implementation project(':capacitor-cordova-android-plugins')
 }
 
 apply from: 'capacitor.build.gradle'

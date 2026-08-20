@@ -1,13 +1,2 @@
 include ':app'
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
-
-include ':capacitor-android'
-def capDir = file('../node_modules/@capacitor/android/capacitor')
-if (!capDir.exists()) {
-    def found = fileTree('../node_modules').matching { include '**/@capacitor/android/capacitor/build.gradle' }.files
-    if (!found.empty) {
-        capDir = found.first().parentFile
-    }
-}
-project(':capacitor-android').projectDir = capDir
+apply from: 'capacitor.settings.gradle'
