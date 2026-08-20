@@ -38,6 +38,8 @@ jobs:
 
       - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
