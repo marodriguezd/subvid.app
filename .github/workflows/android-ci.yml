@@ -131,14 +131,16 @@ jobs:
           chmod +x gradlew
           echo "==> Building Debug APK..."
           ./gradlew assembleDebug --stacktrace --no-daemon
-          echo "==> Building Release APK and AAB Bundle..."
-          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon || ./gradlew assembleRelease --stacktrace --no-daemon || true
+          echo "==> Building Release APK..."
+          ./gradlew assembleRelease --stacktrace --no-daemon || true
+          echo "==> Building Release Bundle (AAB)..."
+          ./gradlew bundleRelease --stacktrace --no-daemon || true
           
           cd ..
           mkdir -p build-outputs
-          echo "==> Locating all built binaries in android/:"
-          find android/ -name "*.apk" -o -name "*.aab"
-          find android/ -name "*.apk" -o -name "*.aab" -exec cp -v {} build-outputs/ \;
+          echo "==> Locating all built binaries in android/app/build/outputs/:"
+          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \)
+          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp -fv {} build-outputs/ \;
           echo "==> Collected build outputs:"
           ls -lah build-outputs/
 
@@ -146,5 +148,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: subvid-android-binaries
-          path: build-outputs/
+          path: build-outputs/*
+          if-no-files-found: error
           retention-days: 30
