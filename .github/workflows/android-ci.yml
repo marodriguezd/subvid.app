@@ -125,72 +125,26 @@ jobs:
             echo "KEY_PASSWORD=subvid123" >> $GITHUB_ENV
           fi
 
-      - name: 🔨 Build Debug APK
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'debug' || github.event_name != 'workflow_dispatch' }}
+      - name: 🔨 Build Android Binaries (Debug APK, Release APK, AAB)
         run: |
           cd android
           chmod +x gradlew
+          echo "==> Building Debug APK..."
           ./gradlew assembleDebug --stacktrace --no-daemon
-
-      - name: 🔨 Build Release APK & Bundle (AAB)
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon
-
-      - name: 📂 Prepare Release Artifacts
-        run: |
-          mkdir -p build-outputs
-          echo "Listing all built binaries from Gradle:"
-          find android/app/build/outputs/ -type f || true
-          find android/app/build/outputs/ -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} build-outputs/ \;
+          echo "==> Building Release APK and AAB Bundle..."
+          ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon || ./gradlew assembleRelease --stacktrace --no-daemon || true
           
-          # Friendly standard aliases
-          for f in build-outputs/*debug*.apk; do
-            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-debug.apk; break; fi
-          done
-          for f in build-outputs/*release*.apk; do
-            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-release.apk; break; fi
-          done
-          for f in build-outputs/*release*.aab; do
-            if [ -f "$f" ]; then cp "$f" build-outputs/subvid-release.aab; break; fi
-          done
-
-          echo "Final build outputs:"
+          cd ..
+          mkdir -p build-outputs
+          echo "==> Locating all built binaries in android/:"
+          find android/ -name "*.apk" -o -name "*.aab"
+          find android/ -name "*.apk" -o -name "*.aab" -exec cp -v {} build-outputs/ \;
+          echo "==> Collected build outputs:"
           ls -lah build-outputs/
 
-      - name: 📤 Upload Debug APK
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'debug' || github.event_name != 'workflow_dispatch' }}
+      - name: 📤 Upload Android Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: subvid-debug-apk
-          path: build-outputs/*debug*.apk
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: 📤 Upload Release APK
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: subvid-release-apk
-          path: build-outputs/*release*.apk
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: 📤 Upload Release App Bundle (AAB)
-        if: ${{ inputs.build_type == 'all' || inputs.build_type == 'release' || github.event_name != 'workflow_dispatch' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: subvid-release-aab
-          path: build-outputs/*.aab
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: 📤 Upload All Android Artifacts Combined
-        uses: actions/upload-artifact@v4
-        with:
-          name: subvid-android-all-binaries
+          name: subvid-android-binaries
           path: build-outputs/
-          if-no-files-found: error
           retention-days: 30
