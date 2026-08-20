@@ -2,6 +2,7 @@
   "appId": "app.subvid.desktop",
   "productName": "Subvid",
   "copyright": "Copyright © 2026 Subvid",
+  "publish": null,
   "directories": {
     "output": "dist-electron",
     "buildResources": "resources"
