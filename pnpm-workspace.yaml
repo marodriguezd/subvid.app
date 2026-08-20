@@ -2,7 +2,7 @@ packages:
   - "."
 
 allowBuilds:
-  electron: set this to true or false
+  electron: false
   esbuild: true
   onnxruntime-node: true
   protobufjs: true

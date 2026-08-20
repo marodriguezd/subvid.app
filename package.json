@@ -2,7 +2,7 @@
   "name": "subvid.app",
   "productName": "Subvid",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "electron/main.cjs",
   "description": "AI-powered subtitle generator and video subtitle translator running 100% locally.",
   "author": "Subvid Team",
@@ -50,10 +50,5 @@
     "electron": "^35.0.0",
     "electron-builder": "^25.1.8",
     "wrangler": "4.98.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron"
-    ]
   }
 }
