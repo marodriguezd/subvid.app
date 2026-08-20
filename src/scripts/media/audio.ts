@@ -140,22 +140,47 @@ export function createAudioService(options: AudioServiceOptions) {
     options.setStatus(options.tt("steps.readingVideo"), "busy")
     await worker.writeFile(inputName, await fetchFile(file))
     options.setStatus(options.tt("steps.extractingAudio"), "busy")
-    await worker.exec([
-      "-i",
-      inputName,
-      "-vn",
-      "-ac",
-      "1",
-      "-ar",
-      "16000",
-      "-f",
-      "wav",
-      outputName,
-    ])
+    try {
+      await worker.exec([
+        "-i",
+        inputName,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-f",
+        "wav",
+        outputName,
+      ])
+    } catch (execError: any) {
+      const msg = String(execError?.message || execError || "")
+      if (
+        msg.includes("does not contain any stream") ||
+        msg.includes("Aborted") ||
+        msg.includes("FS error")
+      ) {
+        await worker.deleteFile(inputName).catch(() => {})
+        await worker.deleteFile(outputName).catch(() => {})
+        throw new Error(options.tt("noAudio") || "This video has no audio track.")
+      }
+      throw execError
+    }
 
     options.setStatus(options.tt("steps.readingAudio"), "busy")
     options.setProgress(32)
-    const outputData = await worker.readFile(outputName)
+    let outputData: Uint8Array
+    try {
+      outputData = (await worker.readFile(outputName)) as Uint8Array
+    } catch (readError: any) {
+      const msg = String(readError?.message || readError || "")
+      if (msg.includes("FS error") || msg.includes("does not contain any stream")) {
+        await worker.deleteFile(inputName).catch(() => {})
+        await worker.deleteFile(outputName).catch(() => {})
+        throw new Error(options.tt("noAudio") || "This video has no audio track.")
+      }
+      throw readError
+    }
     await worker.deleteFile(inputName)
     await worker.deleteFile(outputName)
     options.applyProgress(34)
