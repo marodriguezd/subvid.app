@@ -1,4 +1,5 @@
-export const ASR_MODEL = "Xenova/whisper-tiny"
+const isAndroidRuntime = typeof navigator !== "undefined" && (/Android/i.test(navigator.userAgent || "") || typeof (globalThis as any).Capacitor !== "undefined")
+export const ASR_MODEL = isAndroidRuntime ? "Xenova/whisper-tiny" : "Xenova/whisper-base"
 export const TRANSLATION_MODEL = "Xenova/nllb-200-distilled-600M"
 
 export const MARIAN_TRANSLATION_MODELS: Record<string, string> = {

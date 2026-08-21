@@ -39,6 +39,7 @@ const NOISY_TRANSLATION_TAIL = /[.!?…](?:\s*[.!?…¡¿,;:>]){3,}.*$/u
 const REPEATED_TRAILING_SYMBOLS = /(?:[^\p{L}\p{N}\s])(?:\s*[^\p{L}\p{N}\s]){3,}\s*$/u
 const TRANSLATION_DEBUG = import.meta.env.DEV
 const hasWebGPU = typeof navigator !== "undefined" && "gpu" in navigator
+const isAndroid = typeof navigator !== "undefined" && (/Android/i.test(navigator.userAgent || "") || typeof (globalThis as any).Capacitor !== "undefined")
 
 type TranslationBackend = "prompt" | "marian" | "nllb"
 
@@ -289,7 +290,8 @@ export function createTranslationService(options: TranslationServiceOptions) {
   async function ensureMarianTranslator(sourceLang: string, targetLang: string) {
     const model = marianModelForPair(sourceLang, targetLang)
     if (!model) return false
-    await ensureTransformersTranslator("marian", model, false)
+    if (!isAndroid && !hasWebGPU) return false
+    await ensureTransformersTranslator("marian", model, !isAndroid)
     return true
   }
 
@@ -455,7 +457,7 @@ export function createTranslationService(options: TranslationServiceOptions) {
     targetLang: string,
     preferMarian = true,
   ) {
-    if (preferMarian && marianModelForPair(sourceLang, targetLang)) {
+    if (preferMarian && marianModelForPair(sourceLang, targetLang) && (isAndroid || hasWebGPU)) {
       try {
         return await translateWithMarian(texts, sourceLang, targetLang)
       } catch (err) {
