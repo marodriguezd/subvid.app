@@ -288,8 +288,8 @@ export function createTranslationService(options: TranslationServiceOptions) {
 
   async function ensureMarianTranslator(sourceLang: string, targetLang: string) {
     const model = marianModelForPair(sourceLang, targetLang)
-    if (!model || !hasWebGPU) return false
-    await ensureTransformersTranslator("marian", model, true)
+    if (!model) return false
+    await ensureTransformersTranslator("marian", model, false)
     return true
   }
 
@@ -455,7 +455,7 @@ export function createTranslationService(options: TranslationServiceOptions) {
     targetLang: string,
     preferMarian = true,
   ) {
-    if (preferMarian && marianModelForPair(sourceLang, targetLang) && hasWebGPU) {
+    if (preferMarian && marianModelForPair(sourceLang, targetLang)) {
       try {
         return await translateWithMarian(texts, sourceLang, targetLang)
       } catch (err) {
