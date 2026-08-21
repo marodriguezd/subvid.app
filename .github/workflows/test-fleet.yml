@@ -1,0 +1,62 @@
+name: 🧪 Automated Test Fleet & Subtitle Verification
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-fleet:
+    name: 🔬 Test Suite & Golden Subtitle Contrast (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: 📥 Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: |
+          rm -f .npmrc || true
+          pnpm install --no-frozen-lockfile
+
+      - name: 🧪 Run Automated Vitest Test Suite
+        run: pnpm test
+
+      - name: 🔍 Run Empirical Subtitle Verification & Contrast CLI
+        run: pnpm run test:verify
+
+      - name: 📤 Upload Verification & Subtitle Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: subtitle-verification-results-${{ matrix.os }}
+          path: build-outputs/test-results
+          if-no-files-found: warn
+          retention-days: 14

@@ -48,6 +48,9 @@ jobs:
       - name: 📥 Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: 🧪 Run Automated Subtitle Verification Suite
+        run: pnpm run test:all
+
       - name: 🔨 Build static web app for Android
         run: pnpm run build:android
 
