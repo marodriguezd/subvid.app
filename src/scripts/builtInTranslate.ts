@@ -157,7 +157,13 @@ export async function probeBuiltInTranslation(source, target) {
 }
 
 export function hasBuiltInTranslationSupport() {
-  return "LanguageModel" in globalThis
+  return (
+    "LanguageModel" in globalThis ||
+    ("translation" in globalThis &&
+      typeof (globalThis as any).translation?.createTranslator === "function") ||
+    ("ai" in globalThis &&
+      typeof (globalThis as any).ai?.translator?.create === "function")
+  )
 }
 
 /**

@@ -131,6 +131,26 @@ export function createAudioService(options: AudioServiceOptions) {
   }
 
   async function extractAudioBuffer(file: File) {
+    // Fast path: For audio files or standard audio formats, try native browser Web Audio decoding first
+    // This avoids downloading/running 32MB FFmpeg WASM and eliminates MEMFS memory duplication on mobile
+    if (file.type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac|opus)$/i.test(file.name)) {
+      try {
+        options.setStatus(options.tt("steps.decodingAudio"), "busy")
+        options.setProgress(15)
+        const arrayBuffer = await file.arrayBuffer()
+        const audioContext = new AudioContext({ sampleRate: 16000 })
+        const decoded = await audioContext.decodeAudioData(arrayBuffer)
+        const mono = decoded.getChannelData(0)
+        const copied = new Float32Array(mono.length)
+        copied.set(mono)
+        await audioContext.close()
+        options.setProgress(38)
+        return copied
+      } catch (nativeErr) {
+        console.warn("[audio] Native Web Audio decoding failed, falling back to FFmpeg WASM:", nativeErr)
+      }
+    }
+
     const inputName = "input-video"
     const outputName = "audio.wav"
 
